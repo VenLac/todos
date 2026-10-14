@@ -39,6 +39,18 @@
 
   <div class="toolbar">
     <div class="chips" id="chips" role="group" aria-label="按标签筛选"></div>
+    <div class="sch-nav" id="schedBar">
+      <div class="sch-step">
+        <button type="button" class="btn icon" data-nav="-1" aria-label="上一段"><svg class="ic" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <button type="button" class="btn" data-nav="0">今天</button>
+        <button type="button" class="btn icon" data-nav="1" aria-label="下一段"><svg class="ic" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+      </div>
+      <div class="seg plain" role="group" aria-label="显示范围">
+        <button type="button" data-span="1" aria-pressed="false">日</button>
+        <button type="button" data-span="3" aria-pressed="false">3 天</button>
+        <button type="button" data-span="7" aria-pressed="true">周</button>
+      </div>
+    </div>
     <div class="tools">
       <div class="seg" id="groupSeg" role="group" aria-label="分类方式">
         <i class="thumb" aria-hidden="true"></i>

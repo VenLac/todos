@@ -18,20 +18,31 @@
   };
 
   // ───── 读取选中的日期 ─────
-  const dates = [...new Set((new URLSearchParams(location.search).get('d') || '').split(',').filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s)))].sort();
-  if (!dates.length) {
+  const selected = [...new Set((new URLSearchParams(location.search).get('d') || '').split(',').filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s)))].sort();
+  if (!selected.length) {
     location.replace('index.html');
     return;
   }
-  $('#back').href = `index.html?m=${dates[0].slice(0, 7)}`;
-  const dateSet = new Set(dates);
+  $('#back').href = `index.html?m=${selected[0].slice(0, 7)}`;
+  // dates：当前这个视图在看的日子。自由贴 / 整理里就是选中的几天；日程里是一个可以前后翻的窗口（见 winDays）
+  let dates = selected;
+  let dateSet = new Set(dates);
   const today = () => ymd(new Date());
+  const addDays = (d, n) => { const x = parse(d); return ymd(new Date(x.getFullYear(), x.getMonth(), x.getDate() + n)); };
+  const monday = (d) => addDays(d, -((parse(d).getDay() + 6) % 7));
 
   const S = {
     view: ['list', 'schedule'].includes(store.get('todos.view')) ? store.get('todos.view') : 'canvas',
     group: ['tag', 'flat'].includes(store.get('todos.group')) ? store.get('todos.group') : 'date',
     tag: null,
     hideDone: false,
+    // 日程：显示几天（1 / 3 / 7）和从哪天开始；第一次从选中的第一天看起，手机上默认 3 天，电脑上默认一周
+    span: [1, 3, 7].includes(Number(store.get('todos.span'))) ? Number(store.get('todos.span')) : innerWidth <= 600 ? 3 : 7,
+    anchor: selected[0],
+  };
+  const winDays = () => {
+    const start = S.span === 7 ? monday(S.anchor) : S.anchor;
+    return Array.from({ length: S.span }, (_, i) => addDays(start, i));
   };
 
   const mine = () => Todos.all().filter((t) => dateSet.has(t.date));
@@ -310,6 +321,8 @@
 
   // ───── 渲染 ─────
   function render() {
+    dates = S.view === 'schedule' ? winDays() : selected;
+    dateSet = new Set(dates);
     const items = mine();
     head(items);
     chips(items);
@@ -317,6 +330,7 @@
     $('#stage').className = `stage ${S.view}`;
     document.querySelectorAll('.mode [data-view]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === S.view)));
     document.querySelectorAll('[data-group]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.group === S.group)));
+    document.querySelectorAll('[data-span]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.span) === S.span)));
     moveThumbs();
     if (S.view === 'canvas') renderCanvas(items);
     else if (S.view === 'schedule') { canvas = null; sched.render($('#stage')); }
@@ -343,9 +357,10 @@
     document.startViewTransition(apply).finished.finally(() => delete html.dataset.vt);
   }
 
-  // 日程（时间轴）视图
+  // 日程（时间轴）视图：数据和动作都从这里给它
   const sched = Schedule({
-    dates,
+    days: () => dates,
+    selected: new Set(selected),
     today,
     rel,
     items: () => visible(mine()),
@@ -353,9 +368,45 @@
       if (Object.keys(patch).length) Todos.update(id, patch);
       render();
     },
-    open: (t) => openDialog(t),
-    create: ({ date, start = '', end = '' }) => openDialog(null, { date, start, end }),
+    toggle(t) {
+      Todos.update(t.id, { done: !t.done });
+      render();
+    },
+    remove: (t) => removeWithUndo(t),
+    edit: (t) => openDialog(t),
+    add({ content, date, start = '', end = '' }) {
+      Todos.add([{ date, content, tag: S.tag || '', start, end, due: '' }]);
+      render();
+      toast('已添加');
+    },
+    more: ({ content, date, start, end }) => openDialog(null, { date, start, end, content }),
+    focusDay(d) {
+      transition('fwd', () => {
+        S.span = 1;
+        S.anchor = d;
+        store.set('todos.span', 1);
+        render();
+      });
+    },
   });
+
+  // 日程上方的"前一段 / 今天 / 后一段"和"日 / 3 天 / 周"
+  function goWindow(n) {
+    transition(n < 0 ? 'back' : 'fwd', () => {
+      S.anchor = n === 0 ? today() : addDays(S.anchor, n * S.span);
+      render();
+    });
+  }
+  document.querySelectorAll('[data-nav]').forEach((b) => b.addEventListener('click', () => goWindow(Number(b.dataset.nav))));
+  document.querySelectorAll('[data-span]').forEach((b) => b.addEventListener('click', () => {
+    const n = Number(b.dataset.span);
+    if (n === S.span) return;
+    transition(n > S.span ? 'fwd' : 'back', () => {
+      S.span = n;
+      store.set('todos.span', n);
+      render();
+    });
+  }));
 
   // ───── 交互：按钮 / 行 ─────
   $('#stage').addEventListener('click', (e) => {
@@ -386,6 +437,13 @@
     const t = Todos.all().find((x) => x.id === el.dataset.id);
     if (!t) return;
     if (e.key === 'Enter') { e.preventDefault(); openDialog(t); return; }
+    if (e.key === ' ' && S.view === 'schedule') {
+      e.preventDefault();
+      Todos.update(t.id, { done: !t.done });
+      render();
+      requestAnimationFrame(() => { const again = $(`#stage [data-id="${t.id}"]`); if (again) again.focus(); });
+      return;
+    }
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeWithUndo(t); return; }
     if (S.view === 'schedule') {
       if (sched.nudge(t, e.key, e.shiftKey)) {
@@ -508,11 +566,12 @@
   function openDialog(t, opts = {}) {
     editing = t || null;
     newPos = opts.pos || null;
-    const only = opts.date;
+    // 日程里显示的是一整段日子，新建默认只放到今天（不在这一段里就放第一天），别一下建出七张
+    const only = opts.date || (S.view === 'schedule' ? (dates.includes(today()) ? today() : dates[0]) : undefined);
     $('#err').textContent = '';
     $('#dlgTitle').textContent = t ? '编辑便利贴' : '新建便利贴';
     $('#fSave').textContent = t ? '保存' : (dates.length > 1 && !only ? '创建（每天一张）' : '创建');
-    $('#fContent').value = t ? t.content : '';
+    $('#fContent').value = t ? t.content : opts.content || '';
     $('#fTag').value = t ? t.tag : (opts.tag !== undefined ? opts.tag : (S.tag || ''));
     $('#datesCreate').hidden = !!t;
     $('#dateEdit').hidden = !t;
@@ -650,6 +709,15 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => el.classList.remove('on'), 5000);
   }
+
+  // 日程：T 回到今天，←/→ 前后翻（焦点不在输入框或任务上时）
+  document.addEventListener('keydown', (e) => {
+    if (S.view !== 'schedule' || dlg.open || e.ctrlKey || e.metaKey || e.altKey || sched.busy()) return;
+    if (/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(document.activeElement.tagName) || document.activeElement.dataset.id) return;
+    if (e.key.toLowerCase() === 't') { e.preventDefault(); goWindow(0); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); goWindow(-1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); goWindow(1); }
+  });
 
   // 快捷键 N 新建
   document.addEventListener('keydown', (e) => {
