@@ -10,8 +10,8 @@ import { createServer } from 'node:http';
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openDb } from './db.js';
-import { createAuth, newSecret } from './auth.js';
+import { openSqlite } from './sqlite.js';
+import { createAuth, loadSecret } from './auth.js';
 import { createApp } from './app.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -22,14 +22,9 @@ const dataDir = resolve(env.DATA_DIR || join(here, '..', 'data'));
 const flag = (v) => (v === undefined || v === '' ? undefined : /^(1|true|yes)$/i.test(v));
 
 mkdirSync(dataDir, { recursive: true });
-const db = openDb(join(dataDir, 'todos.db'));
-
-let secret = env.SESSION_SECRET || db.meta('session_secret');
-if (!secret) {
-  secret = newSecret();
-  db.setMeta('session_secret', secret);
-}
-const auth = createAuth({ password: env.TODOS_PASSWORD || '', secret, secureCookie: flag(env.COOKIE_SECURE) });
+const db = openSqlite(join(dataDir, 'todos.db'));
+const secret = await loadSecret(db, env.SESSION_SECRET);
+const auth = await createAuth({ password: env.TODOS_PASSWORD || '', secret, secureCookie: flag(env.COOKIE_SECURE) });
 
 const server = createServer(createApp({
   db,

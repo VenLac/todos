@@ -6,7 +6,15 @@
   const next = /^[\w.-]+\.html(\?[\w=,&%.-]*)?$/.test(raw) ? raw : 'index.html';
 
   fetch('api/session').then((r) => r.json()).then((s) => {
-    if (!s.auth || s.ok) location.replace(next);
+    if (!s.auth || s.ok) return location.replace(next);
+    // 部署到 Workers 但还没设置密码：先锁着，告诉怎么设置
+    if (s.setup) {
+      $('h1').textContent = '还差一步';
+      $('.login-card > p').innerHTML = '还没有设置访问密码。在项目目录运行下面的命令，设置好后刷新这个页面：<code>npx wrangler secret put TODOS_PASSWORD</code>';
+      $('.login-card .field').hidden = true;
+      $('#go').hidden = true;
+      $('#err').hidden = true;
+    }
   }).catch(() => {});
 
   $('#form').addEventListener('submit', async (e) => {

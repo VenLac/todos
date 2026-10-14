@@ -6,7 +6,7 @@
 
 把待办贴在日历上。选一天或几天，打开一面可以随手摆放的便利贴墙。
 
-[快速开始](#快速开始) · [部署](#部署) · [数据同步](#数据同步) · [接口](#接口)
+[快速开始](#快速开始) · [部署到 Cloudflare Workers](#部署到-cloudflare-workers) · [部署到自己的服务器](#部署到自己的服务器) · [数据同步](#数据同步)
 
 </div>
 
@@ -26,7 +26,7 @@
   <tr>
     <td valign="top"><b>为手指设计</b><br>长按拿起便利贴、长按多选日期、左右滑动翻月，底部抽屉式编辑。</td>
     <td valign="top"><b>可选密码</b><br>设置一个环境变量就需要登录，会话 30 天，输错多次自动限流。</td>
-    <td valign="top"><b>一条命令部署</b><br><code>docker compose up -d</code>，数据放在数据卷里，升级不丢。</td>
+    <td valign="top"><b>两种部署方式</b><br>部署到 Cloudflare Workers（数据在 D1），或用 <code>docker compose up -d</code> 跑在自己的服务器上。</td>
   </tr>
 </table>
 
@@ -85,14 +85,36 @@ npm start                          # 打开 http://localhost:8080
 ```bash
 TODOS_PASSWORD=你的密码 npm start   # 带密码保护
 npm run dev                        # 改了 server/ 下的代码自动重启
-npm test                           # 跑接口测试
+npm test                           # 接口测试：同一套用例分别跑 Node 版和 Worker 版
 ```
 
 不想启动服务也可以直接双击 `public/index.html`，这时数据只存在当前浏览器里，不会同步。
 
-## 部署
+## 部署到 Cloudflare Workers
 
-推荐用 Docker Compose：
+页面由 Workers 静态资源托管，接口跑在 Worker 里，数据存在 D1（Cloudflare 的 SQLite）。个人使用一般在免费额度内。
+
+```bash
+npx wrangler@4.144.0 login                          # 第一次用需要登录 Cloudflare
+npm run cf:deploy                                   # 部署；首次会自动创建 D1 数据库
+npx wrangler@4.144.0 secret put TODOS_PASSWORD      # 设置访问密码
+```
+
+- 首次部署会在你的账号里创建名为 `todos` 的 D1 数据库并和 Worker 关联，之后的部署自动沿用，`wrangler.jsonc` 里不需要填 `database_id`
+- 表在第一次请求时自动创建，不需要单独跑迁移
+- **没设置密码之前，Worker 是锁着的**：页面会提示你先运行上面第三条命令，接口一律拒绝。确实想不设密码公开访问，可以加一个变量 `ALLOW_OPEN=1`
+- 绑定自己的域名：在 Cloudflare 控制台的 Worker 设置里添加自定义域名
+
+本地预览 Worker 版：
+
+```bash
+echo 'TODOS_PASSWORD=本地密码' > .dev.vars
+npm run cf:dev                                      # 使用本地 D1，不影响线上数据
+```
+
+## 部署到自己的服务器
+
+用 Docker Compose：
 
 ```bash
 cp .env.example .env     # 至少设置 TODOS_PASSWORD
@@ -139,21 +161,22 @@ todos.example.com {
 
 </details>
 
-### 配置
+## 配置
 
-| 变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `TODOS_PASSWORD` | 空 | 访问密码。**不设则任何能访问这个地址的人都能读写** |
-| `PORT` | `8080` | 监听端口 |
-| `HOST` | `0.0.0.0` | 监听地址 |
-| `DATA_DIR` | `./data` | 数据目录，数据库是其中的 `todos.db` |
-| `TRUST_PROXY` | `0` | 在反向代理后面时设为 `1`，用 `X-Forwarded-For` 识别客户端 IP |
-| `SESSION_SECRET` | 自动生成 | 会话签名密钥；不设则首次启动生成并存进数据库 |
-| `COOKIE_SECURE` | 自动 | 强制开关 Cookie 的 `Secure` 标记 |
+| 变量 | 适用 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `TODOS_PASSWORD` | 两者 | 空 | 访问密码。Node 版不设则任何人都能读写；Workers 版不设则锁住。Workers 上请用 `wrangler secret put` 设置 |
+| `SESSION_SECRET` | 两者 | 自动生成 | 会话签名密钥；不设则首次启动时生成并存进数据库 |
+| `COOKIE_SECURE` | 两者 | 自动 | 强制开关 Cookie 的 `Secure` 标记；默认按是否 HTTPS 判断 |
+| `ALLOW_OPEN` | Workers | 空 | 设为 `1` 时，不设密码也允许访问 |
+| `PORT` | Node | `8080` | 监听端口 |
+| `HOST` | Node | `0.0.0.0` | 监听地址 |
+| `DATA_DIR` | Node | `./data` | 数据目录，数据库是其中的 `todos.db` |
+| `TRUST_PROXY` | Node | `0` | 在反向代理后面时设为 `1`，用 `X-Forwarded-For` 识别客户端 IP |
 
 修改密码后所有旧会话立即失效；同一 IP 10 分钟内输错 10 次会被暂时拒绝。
 
-### 备份与恢复
+## 备份与恢复
 
 - **导出**：日历页左下角“导出备份”，或请求 `GET /api/export`，得到一个 JSON 文件
 - **整库热备份**：数据库开启了 WAL，请用 SQLite 自带的方式复制：
@@ -163,6 +186,7 @@ todos.example.com {
   ```
 
 - **恢复**：停掉服务，把备份文件放回数据目录并命名为 `todos.db`，再启动
+- **Workers 版**：除了“导出备份”，也可以导出整个 D1 数据库：`npx wrangler@4.144.0 d1 export todos --remote --output backup.sql`
 
 ## 数据同步
 
@@ -178,7 +202,7 @@ todos.example.com {
 ## 项目结构
 
 ```
-public/                  前端：纯静态文件，无构建
+public/                  前端：纯静态文件，无构建（两种部署共用）
   index.html             日历
   board.html             便利贴：自由贴 / 整理
   login.html             登录
@@ -190,11 +214,17 @@ public/                  前端：纯静态文件，无构建
   sw.js                  Service Worker
   manifest.webmanifest   PWA
 server/
-  server.js              入口：环境变量、启动、优雅退出
-  app.js                 路由、静态文件、接口、数据校验
-  db.js                  SQLite 读写
-  auth.js                密码登录与会话
-test/api.test.js         接口测试（node --test）
+  api.js                 接口路由与数据校验（Web 标准 Request/Response，两边共用）
+  auth.js                密码登录与会话（Web Crypto，两边共用）
+  schema.js              表结构与 SQL（两边共用）
+  server.js              Node 入口：环境变量、启动、优雅退出
+  app.js                 Node：静态文件，把请求转给 api.js
+  sqlite.js              Node：node:sqlite 数据层
+  worker.js              Workers 入口
+  d1.js                  Workers：D1 数据层
+test/                    接口测试；D1 用 node:sqlite 模拟，Worker 版不联网也能测
+wrangler.jsonc           Workers 配置
+Dockerfile · docker-compose.yml · .env.example
 docs/screenshots/        README 里的截图
 ```
 
@@ -203,7 +233,7 @@ docs/screenshots/        README 里的截图
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | `GET` | `/api/health` | 健康检查 |
-| `GET` | `/api/session` | `{ auth, ok }`：是否需要登录、是否已登录 |
+| `GET` | `/api/session` | `{ auth, ok, setup }`：是否需要登录、是否已登录、是否还没设置密码 |
 | `POST` | `/api/login` | `{ password }` |
 | `POST` | `/api/logout` | 退出登录 |
 | `GET` | `/api/todos` | `{ todos, rev, fresh }` |
