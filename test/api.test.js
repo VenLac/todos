@@ -111,6 +111,20 @@ for (const [name, boot] of Object.entries(BACKENDS)) {
       assert.equal((await list()).some((t) => t.id === 'ok1'), false);
     });
 
+    test('时间：开始 / 结束可空，截止可以只有日期', async () => {
+      await post('/api/sync', { upsert: [
+        todo('t1', { start: '09:30', end: '10:15', due: '2026-10-15' }),
+        todo('t2', { start: '13:00', end: '12:00' }), // 结束早于开始 → 丢掉结束
+        todo('t3', { end: '11:00' }), // 没有开始 → 丢掉结束
+        todo('t4', { start: '22:00', end: '24:00', due: '2026-10-14T18:30' }),
+      ] });
+      const got = Object.fromEntries((await list()).filter((t) => /^t\d$/.test(t.id)).map((t) => [t.id, [t.start, t.end, t.due]]));
+      assert.deepEqual(got, { t1: ['09:30', '10:15', '2026-10-15'], t2: ['13:00', '', ''], t3: ['', '', ''], t4: ['22:00', '24:00', '2026-10-14T18:30'] });
+      for (const bad of [{ start: '24:00' }, { start: '9:30' }, { end: '25:00', start: '01:00' }, { due: '2026-10-15T24:00' }]) {
+        assert.equal((await post('/api/sync', { upsert: [todo('tb', bad)] })).status, 400, JSON.stringify(bad));
+      }
+    });
+
     test('大批量写入（超过 D1 一批的条数）全部生效', async () => {
       const many = Array.from({ length: 250 }, (_, i) => todo(`m${i}`, { updatedAt: 500 }));
       const r = await (await post('/api/sync', { upsert: many })).json();

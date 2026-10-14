@@ -24,6 +24,29 @@
     const d = new Date(s);
     return `${d.getMonth() + 1}月${d.getDate()}日 ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
+  // ───── 时间 ─────
+  // start / end：当天的开始、结束时刻 'HH:MM'（可空）；due：截止，'YYYY-MM-DD' 或 'YYYY-MM-DDTHH:MM'（可空）
+  const toMin = (hm) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
+  const fromMin = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+  // 只有日期的截止 = 那天结束时
+  const dueAt = (due) => (due.length > 10 ? new Date(due) : new Date(...due.split('-').map((n, i) => Number(n) - (i === 1 ? 1 : 0)), 23, 59, 59, 999));
+  const dueState = (t) => {
+    if (!t.due || t.done) return '';
+    const diff = dueAt(t.due) - Date.now();
+    return diff < 0 ? 'over' : diff < 24 * 3600 * 1000 ? 'soon' : '';
+  };
+  // 相对任务所在那天来说截止：同一天只说时刻
+  const fmtDueFor = (t) => {
+    if (!t.due) return '';
+    const day = t.due.slice(0, 10);
+    const time = t.due.slice(11);
+    if (day === t.date) return time ? `${time} 截止` : '当天截止';
+    const d = parse(day);
+    return `${d.getMonth() + 1}月${d.getDate()}日${time ? ` ${time}` : ''} 截止`;
+  };
+  const fmtSpan = (t) => (t.start ? (t.end ? `${t.start}–${t.end}` : t.start) : '');
+  // 任务换了日期时，"同一天截止"跟着走
+  const shiftDue = (t, date) => (t.due && t.due.slice(0, 10) === t.date ? date + t.due.slice(10) : t.due || '');
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   // 同一毫秒内连续改动也保证时间戳递增，服务器按它判断新旧
   let lastStamp = 0;
@@ -59,14 +82,14 @@
     const t = new Date();
     const at = (off, h, m) => `${ymd(new Date(t.getFullYear(), t.getMonth(), t.getDate() + off))}T${pad(h)}:${pad(m)}`;
     const day = (off) => ymd(new Date(t.getFullYear(), t.getMonth(), t.getDate() + off));
-    const mk = (off, tag, content, due) => {
+    const mk = (off, tag, content, due, start = '', end = '') => {
       const now = stamp();
-      return { id: uid(), date: day(off), tag, content, due: due || '', done: false, createdAt: now, updatedAt: now };
+      return { id: uid(), date: day(off), tag, content, due: due || '', start, end, done: false, createdAt: now, updatedAt: now };
     };
     return [
-      mk(0, '工作', '整理本周计划，把要推进的三件事写下来', at(0, 18, 0)),
+      mk(0, '工作', '整理本周计划，把要推进的三件事写下来', at(0, 18, 0), '09:30', '10:30'),
       mk(0, '生活', '买牛奶和鸡蛋'),
-      mk(1, '学习', '读完第三章并写 5 条笔记', at(1, 20, 0)),
+      mk(1, '学习', '读完第三章并写 5 条笔记', at(1, 20, 0), '19:00', '20:00'),
       mk(1, '生活', '给家里打个电话'),
       mk(2, '工作', '提交周报', at(2, 12, 0)),
     ];
@@ -230,6 +253,7 @@
   const touch = (t) => ({ ...t, updatedAt: stamp() });
   const Todos = {
     ymd, parse, pad, WEEK, fmtDay, fmtDue, colorOf,
+    toMin, fromMin, dueAt, dueState, fmtDueFor, fmtSpan, shiftDue,
     all: () => list,
     status: () => status,
     sync: pull,

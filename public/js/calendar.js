@@ -33,12 +33,13 @@
     for (let i = 0; i < rows * 7; i++) {
       const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
       const key = ymd(d);
-      const items = byDate.get(key) || [];
+      // 有开始时间的按时间排在前面，其余按创建顺序
+      const items = (byDate.get(key) || []).slice().sort((a, b) => (a.start || '99').localeCompare(b.start || '99') || a.createdAt - b.createdAt);
       const open = items.filter((t) => !t.done).length;
       const label = `${d.getMonth() + 1}月${d.getDate()}日 周${WEEK[d.getDay()]}，` + (items.length ? `${items.length} 项待办，${open} 项未完成` : '没有待办');
       // 格子里贴着的迷你便利贴，每张按 id 歪一点
       const tilt = (t) => { let h = 0; for (const ch of t.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return ((h % 7) - 3) * 0.6; };
-      const pills = items.slice(0, 3).map((t) => `<span class="pill c${colorOf(t.tag)}${t.done ? ' done' : ''}" style="--r:${tilt(t)}deg"><b>${esc(t.content)}</b></span>`).join('');
+      const pills = items.slice(0, 3).map((t) => `<span class="pill c${colorOf(t.tag)}${t.done ? ' done' : ''}" style="--r:${tilt(t)}deg">${t.start ? `<time>${t.start}</time>` : ''}<b>${esc(t.content)}</b></span>`).join('');
       const dots = items.slice(0, 6).map((t) => `<i class="c${colorOf(t.tag)}${t.done ? ' done' : ''}" style="--r:${tilt(t) * 3}deg"></i>`).join('');
       const we = d.getDay() === 0 || d.getDay() === 6;
       html += `<button type="button" class="day${d.getMonth() !== mo ? ' out' : ''}${key === today ? ' today' : ''}${key < today ? ' past' : ''}${we ? ' we' : ''}" data-date="${key}" aria-label="${label}" aria-pressed="false" style="--i:${i}">
@@ -68,18 +69,26 @@
   }
 
   // 侧栏：从今天起还没完成的事，按日期 / 截止时间排
+  // 右侧小字：有开始时间显示开始时间，否则显示当天的截止时刻
+  const when = (t) => {
+    if (t.start) return `<em>${t.start}</em>`;
+    if (t.due && t.due.slice(0, 10) === t.date && t.due.length > 10) return `<em class="due">${t.due.slice(11)} 截止</em>`;
+    return '';
+  };
+
   function upcoming(today) {
-    const dueKey = (t) => (t.due ? new Date(t.due).getTime() : Infinity);
+    const dueKey = (t) => (t.due ? Todos.dueAt(t.due).getTime() : Infinity);
+    const startKey = (t) => (t.start ? Todos.toMin(t.start) : Infinity);
     const list = Todos.all()
       .filter((t) => !t.done && t.date >= today)
-      .sort((a, b) => a.date.localeCompare(b.date) || dueKey(a) - dueKey(b) || a.createdAt - b.createdAt)
+      .sort((a, b) => a.date.localeCompare(b.date) || startKey(a) - startKey(b) || dueKey(a) - dueKey(b) || a.createdAt - b.createdAt)
       .slice(0, 6);
     const rel = (d) => {
       const n = Math.round((parse(d) - parse(today)) / 864e5);
       return n === 0 ? '今天' : n === 1 ? '明天' : n === 2 ? '后天' : `${parse(d).getMonth() + 1}/${parse(d).getDate()}`;
     };
     $('#upcoming').innerHTML = list.length
-      ? list.map((t, i) => `<li><a class="c${colorOf(t.tag)}" href="board.html?d=${t.date}"><time>${i && list[i - 1].date === t.date ? '' : rel(t.date)}</time><span>${esc(t.content)}</span>${t.due ? `<em>${t.due.slice(11)}</em>` : ''}</a></li>`).join('')
+      ? list.map((t, i) => `<li><a class="c${colorOf(t.tag)}" href="board.html?d=${t.date}"><time>${i && list[i - 1].date === t.date ? '' : rel(t.date)}</time><span>${esc(t.content)}</span>${when(t)}</a></li>`).join('')
       : '<li class="none">接下来没有待办，难得清闲</li>';
   }
 

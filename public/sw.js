@@ -1,8 +1,8 @@
 /* 离线可用：页面和静态资源"网络优先，失败再用缓存"。
    联网时总是拿最新版本（部署后不会卡在旧页面）；断网时仍能打开，改动由 store.js 暂存、联网后同步。
    /api/ 请求不经过缓存。 */
-const CACHE = 'todos-shell-v1';
-const SHELL = ['./', 'index.html', 'board.html', 'login.html', 'css/style.css', 'js/store.js', 'js/calendar.js', 'js/board.js', 'js/login.js', 'icons/icon.svg', 'manifest.webmanifest'];
+const CACHE = 'todos-shell-v2';
+const SHELL = ['./', 'index.html', 'board.html', 'login.html', 'css/style.css', 'js/store.js', 'js/when.js', 'js/schedule.js', 'js/calendar.js', 'js/board.js', 'js/login.js', 'icons/icon.svg', 'manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

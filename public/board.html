@@ -23,8 +23,12 @@
       <p id="sub"></p>
     </div>
     <div class="mode" role="tablist" aria-label="视图">
+      <i class="thumb" aria-hidden="true"></i>
       <button type="button" role="tab" data-view="canvas" aria-selected="true">
         <svg class="ic" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5" transform="rotate(-6 7.5 7.5)"/><rect x="13" y="5" width="7" height="7" rx="1.5" transform="rotate(5 16.5 8.5)"/><rect x="7" y="13" width="7" height="7" rx="1.5" transform="rotate(3 10.5 16.5)"/></svg>自由贴
+      </button>
+      <button type="button" role="tab" data-view="schedule" aria-selected="false">
+        <svg class="ic" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M8 14h3"/></svg>日程
       </button>
       <button type="button" role="tab" data-view="list" aria-selected="false">
         <svg class="ic" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>整理
@@ -37,6 +41,7 @@
     <div class="chips" id="chips" role="group" aria-label="按标签筛选"></div>
     <div class="tools">
       <div class="seg" id="groupSeg" role="group" aria-label="分类方式">
+        <i class="thumb" aria-hidden="true"></i>
         <button type="button" data-group="date" aria-pressed="true">按日期</button>
         <button type="button" data-group="tag" aria-pressed="false">按标签</button>
         <button type="button" data-group="flat" aria-pressed="false">列表</button>
@@ -60,22 +65,14 @@
       <textarea id="fContent" maxlength="500" placeholder="要做什么？" required></textarea>
     </div>
 
-    <div class="two">
-      <div class="field">
-        <label for="fTag">标签</label>
-        <div class="tagwrap">
-          <input type="text" id="fTag" list="tagList" maxlength="12" placeholder="如 工作、生活" autocomplete="off">
-          <i class="c0" id="tagSwatch"></i>
-        </div>
-        <datalist id="tagList"></datalist>
+    <div class="field">
+      <label for="fTag">标签</label>
+      <div class="tagwrap">
+        <input type="text" id="fTag" list="tagList" maxlength="12" placeholder="如 工作、生活" autocomplete="off">
+        <i class="c0" id="tagSwatch"></i>
       </div>
-      <div class="field">
-        <label for="fDue">截止时间</label>
-        <input type="datetime-local" id="fDue">
-      </div>
+      <datalist id="tagList"></datalist>
     </div>
-
-    <label class="check" id="perDayRow" hidden><input type="checkbox" id="fPerDay"> 每天都在这个时刻截止（沿用各自的日期）</label>
 
     <div class="field" id="datesCreate">
       <span>新建到这些天（每天一张）</span>
@@ -85,6 +82,25 @@
       <label for="fDate">日期</label>
       <input type="date" id="fDate">
     </div>
+
+    <!-- 时间都可以只填一部分：空着的格子按这一天补齐，灰色占位就是补齐后的值 -->
+    <fieldset class="field when">
+      <legend>时间 <small>不填就是不定时间</small></legend>
+      <div class="tparts" id="spanParts">
+        <input class="tp" id="fSH" data-part="h" inputmode="numeric" maxlength="2" placeholder="时" aria-label="开始：时" autocomplete="off"><b>:</b><input class="tp" id="fSM" data-part="mi" inputmode="numeric" maxlength="2" placeholder="分" aria-label="开始：分" autocomplete="off">
+        <i class="dash">至</i>
+        <input class="tp" id="fEH" data-part="h" inputmode="numeric" maxlength="2" placeholder="时" aria-label="结束：时" autocomplete="off"><b>:</b><input class="tp" id="fEM" data-part="mi" inputmode="numeric" maxlength="2" placeholder="分" aria-label="结束：分" autocomplete="off">
+      </div>
+    </fieldset>
+    <fieldset class="field when">
+      <legend>截止 <small>空着的部分按这一天补齐</small></legend>
+      <div class="tparts" id="dueParts">
+        <span class="tgroup"><input class="tp yy" id="fDY" data-part="y" inputmode="numeric" maxlength="4" aria-label="截止：年" autocomplete="off"><em>年</em><input class="tp" id="fDMo" data-part="mo" inputmode="numeric" maxlength="2" aria-label="截止：月" autocomplete="off"><em>月</em><input class="tp" id="fDD" data-part="d" inputmode="numeric" maxlength="2" aria-label="截止：日" autocomplete="off"><em>日</em></span>
+        <span class="tgroup"><input class="tp" id="fDH" data-part="h" inputmode="numeric" maxlength="2" placeholder="时" aria-label="截止：时" autocomplete="off"><b>:</b><input class="tp" id="fDMi" data-part="mi" inputmode="numeric" maxlength="2" placeholder="分" aria-label="截止：分" autocomplete="off"></span>
+        <button type="button" class="tclear" id="dueClear" aria-label="清空截止时间">清空</button>
+      </div>
+      <p class="tpreview" id="whenPreview" aria-live="polite"></p>
+    </fieldset>
 
     <p class="err" id="err" role="alert"></p>
     <div class="form-actions">
@@ -99,6 +115,8 @@
 <div class="toast" id="toast" role="status"><span id="toastTxt"></span><button type="button" id="toastBtn"></button></div>
 
 <script src="js/store.js"></script>
+<script src="js/when.js"></script>
+<script src="js/schedule.js"></script>
 <script src="js/board.js"></script>
 </body>
 </html>

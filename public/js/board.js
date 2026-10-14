@@ -1,6 +1,6 @@
-/* 看板页：自由贴（可拖动摆放的便利贴墙）/ 整理（按日期、标签、列表），新建、编辑、完成、删除并可撤销 */
+/* 看板页：自由贴（可拖动摆放的便利贴墙）/ 日程（时间轴）/ 整理（按日期、标签、列表），新建、编辑、完成、删除并可撤销 */
 (function () {
-  const { ymd, parse, fmtDay, fmtDue, colorOf } = Todos;
+  const { ymd, parse, fmtDay, colorOf, toMin, dueAt, dueState, fmtDueFor, fmtSpan } = Todos;
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const store = {
@@ -13,6 +13,7 @@
     edit: '<svg class="ic" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4z"/></svg>',
     trash: '<svg class="ic" viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg>',
     clock: '<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+    flag: '<svg class="ic" viewBox="0 0 24 24"><path d="M6 21V4M6 4h11l-2 4 2 4H6"/></svg>',
     plus: '<svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
   };
 
@@ -27,7 +28,7 @@
   const today = () => ymd(new Date());
 
   const S = {
-    view: store.get('todos.view') === 'list' ? 'list' : 'canvas',
+    view: ['list', 'schedule'].includes(store.get('todos.view')) ? store.get('todos.view') : 'canvas',
     group: ['tag', 'flat'].includes(store.get('todos.group')) ? store.get('todos.group') : 'date',
     tag: null,
     hideDone: false,
@@ -35,14 +36,11 @@
 
   const mine = () => Todos.all().filter((t) => dateSet.has(t.date));
   const visible = (items) => items.filter((t) => (S.tag === null || (t.tag || '') === S.tag) && !(S.hideDone && t.done));
-  const dueState = (t) => {
-    if (!t.due || t.done) return '';
-    const diff = new Date(t.due) - Date.now();
-    return diff < 0 ? 'over' : diff < 24 * 3600 * 1000 ? 'soon' : '';
-  };
   const hash = (s) => { let h = 0; for (const c of s) h = (h * 33 + c.charCodeAt(0)) >>> 0; return h; };
-  const dueKey = (t) => (t.due ? new Date(t.due).getTime() : Infinity);
-  const byDate = (a, b) => a.date.localeCompare(b.date) || a.done - b.done || dueKey(a) - dueKey(b) || a.createdAt - b.createdAt;
+  const dueKey = (t) => (t.due ? dueAt(t.due).getTime() : Infinity);
+  const startKey = (t) => (t.start ? toMin(t.start) : Infinity);
+  const byDate = (a, b) => a.date.localeCompare(b.date) || a.done - b.done || startKey(a) - startKey(b) || dueKey(a) - dueKey(b) || a.createdAt - b.createdAt;
+  const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   const md = (d) => { const x = parse(d); return `${x.getMonth() + 1}/${x.getDate()}`; };
   const rel = (d) => ({ [today()]: '今天', [ymd(new Date(Date.now() + 864e5))]: '明天', [ymd(new Date(Date.now() - 864e5))]: '昨天' }[d] || '');
 
@@ -79,11 +77,10 @@
   const dueHTML = (t) => {
     if (!t.due) return '';
     const st = dueState(t);
-    const d = new Date(t.due);
-    const sameDay = ymd(d) === t.date;
-    const txt = sameDay ? fmtDue(t.due).split(' ')[1] : fmtDue(t.due);
-    return `<span class="due ${st}">${ICON.clock}${txt}${st === 'over' ? ' 逾期' : ''}</span>`;
+    const txt = fmtDueFor(t);
+    return `<span class="due ${st}">${ICON.flag}${st === 'over' ? txt.replace('截止', '已逾期') : txt}</span>`;
   };
+  const spanHTML = (t) => (t.start ? `<span class="span-chip">${ICON.clock}${fmtSpan(t)}</span>` : '');
 
   // ───── 自由贴：画布 ─────
   const noteSize = () => { const s = innerWidth <= 370 ? 140 : innerWidth <= 600 ? 150 : 212; return { w: s, h: s }; };
@@ -132,7 +129,7 @@
       <div class="paper">
         <div class="note-top"><span class="tag${t.tag ? '' : ' none'}">${t.tag ? `#${esc(t.tag)}` : '未分类'}</span><span class="note-date">${dates.length > 1 ? md(t.date) : ''}</span></div>
         <p class="note-body">${esc(t.content)}</p>
-        <div class="note-foot">${dueHTML(t)}
+        <div class="note-foot">${spanHTML(t)}${dueHTML(t)}
           <span class="acts">
             <button type="button" data-act="done" aria-label="${t.done ? '标为未完成' : '标为完成'}" title="${t.done ? '标为未完成' : '完成'}">${ICON.check}</button>
             <button type="button" data-act="del" aria-label="删除" title="删除">${ICON.trash}</button>
@@ -264,7 +261,7 @@
       <span class="meta">
         ${S.group !== 'tag' ? `<span class="tag-chip${t.tag ? '' : ' none'}">${t.tag ? esc(t.tag) : '未分类'}</span>` : ''}
         ${S.group !== 'date' && dates.length > 1 ? `<span class="date-chip">${md(t.date)}</span>` : ''}
-        ${dueHTML(t)}
+        ${spanHTML(t)}${dueHTML(t)}
       </span>
       <button type="button" class="row-del" data-act="del" aria-label="删除">${ICON.trash}</button>
     </div>`;
@@ -320,9 +317,45 @@
     $('#stage').className = `stage ${S.view}`;
     document.querySelectorAll('.mode [data-view]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === S.view)));
     document.querySelectorAll('[data-group]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.group === S.group)));
+    moveThumbs();
     if (S.view === 'canvas') renderCanvas(items);
+    else if (S.view === 'schedule') { canvas = null; sched.render($('#stage')); }
     else { canvas = null; renderList(items); }
   }
+
+  // 分段按钮下面的白色滑块：跟着选中项滑过去
+  function moveThumbs() {
+    for (const [box, sel] of [[$('.mode'), '[aria-selected="true"]'], [$('#groupSeg'), '[aria-pressed="true"]']]) {
+      const thumb = box.querySelector('.thumb');
+      const btn = box.querySelector(sel);
+      if (!thumb || !btn || !btn.offsetWidth) continue;
+      thumb.style.width = `${btn.offsetWidth}px`;
+      thumb.style.transform = `translateX(${btn.offsetLeft}px)`;
+      requestAnimationFrame(() => box.classList.add('ready'));
+    }
+  }
+
+  // 视图切换动画：支持 View Transitions 的浏览器里，内容顺着切换方向滑入；不支持就直接切
+  function transition(dir, apply) {
+    if (!document.startViewTransition || reduced() || document.visibilityState !== 'visible') return apply();
+    const html = document.documentElement;
+    html.dataset.vt = dir;
+    document.startViewTransition(apply).finished.finally(() => delete html.dataset.vt);
+  }
+
+  // 日程（时间轴）视图
+  const sched = Schedule({
+    dates,
+    today,
+    rel,
+    items: () => visible(mine()),
+    update(id, patch) {
+      if (Object.keys(patch).length) Todos.update(id, patch);
+      render();
+    },
+    open: (t) => openDialog(t),
+    create: ({ date, start = '', end = '' }) => openDialog(null, { date, start, end }),
+  });
 
   // ───── 交互：按钮 / 行 ─────
   $('#stage').addEventListener('click', (e) => {
@@ -354,6 +387,13 @@
     if (!t) return;
     if (e.key === 'Enter') { e.preventDefault(); openDialog(t); return; }
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeWithUndo(t); return; }
+    if (S.view === 'schedule') {
+      if (sched.nudge(t, e.key, e.shiftKey)) {
+        e.preventDefault();
+        requestAnimationFrame(() => { const again = $(`#stage [data-id="${t.id}"]`); if (again) again.focus(); });
+      }
+      return;
+    }
     const step = e.shiftKey ? 40 : 10;
     const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
     if (!d || S.view !== 'canvas') return;
@@ -377,16 +417,25 @@
   }
 
   // 工具栏
+  const VIEWS = ['canvas', 'schedule', 'list'];
+  const GROUPS = ['date', 'tag', 'flat'];
   document.querySelectorAll('.mode [data-view]').forEach((b) => b.addEventListener('click', () => {
-    if (S.view === b.dataset.view) return;
-    S.view = b.dataset.view;
-    store.set('todos.view', S.view);
-    render();
+    const next = b.dataset.view;
+    if (S.view === next || drag || sched.busy()) return;
+    transition(VIEWS.indexOf(next) > VIEWS.indexOf(S.view) ? 'fwd' : 'back', () => {
+      S.view = next;
+      store.set('todos.view', next);
+      render();
+    });
   }));
   document.querySelectorAll('[data-group]').forEach((b) => b.addEventListener('click', () => {
-    S.group = b.dataset.group;
-    store.set('todos.group', S.group);
-    render();
+    const next = b.dataset.group;
+    if (S.group === next) return;
+    transition(GROUPS.indexOf(next) > GROUPS.indexOf(S.group) ? 'fwd' : 'back', () => {
+      S.group = next;
+      store.set('todos.group', next);
+      render();
+    });
   }));
   $('#chips').addEventListener('click', (e) => {
     const b = e.target.closest('.chip');
@@ -400,22 +449,62 @@
   });
   $('#tidyBtn').addEventListener('click', tidy);
   let resizeTimer;
-  addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => S.view === 'canvas' && !drag && render(), 150); });
+  addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      moveThumbs();
+      if (S.view !== 'list' && !drag && !sched.busy()) render();
+    }, 150);
+  });
 
   // ───── 弹窗 ─────
   const dlg = $('#dlg');
   let editing = null;
   let newPos = null;
+  const F = { sh: '#fSH', sm: '#fSM', eh: '#fEH', em: '#fEM', y: '#fDY', mo: '#fDMo', d: '#fDD', h: '#fDH', mi: '#fDMi' };
+  const fv = (k) => $(F[k]).value.trim();
+  const setF = (vals) => { for (const [k, v] of Object.entries(vals)) $(F[k]).value = v; };
+  const dueParts = () => ({ y: fv('y'), mo: fv('mo'), d: fv('d'), h: fv('h'), mi: fv('mi') });
+  const pickedDates = () => [...document.querySelectorAll('#dchips input:checked')].map((i) => i.value);
+  // 时间按哪一天补齐：编辑时是"日期"里的那天；新建时是勾选的每一天
+  const bases = () => (editing ? [$('#fDate').value || editing.date] : pickedDates().length ? pickedDates() : [dates[0]]);
 
-  function syncPerDay() {
-    const n = document.querySelectorAll('#dchips input:checked').length;
-    $('#perDayRow').hidden = editing || n < 2 || !$('#fDue').value;
+  const fmtLen = (m) => (m % 60 ? (m >= 60 ? `${Math.floor(m / 60)} 小时 ${m % 60} 分` : `${m} 分钟`) : `${m / 60} 小时`);
+  function fmtFull(v) {
+    const d = parse(v.slice(0, 10));
+    const year = d.getFullYear() === new Date().getFullYear() ? '' : `${d.getFullYear()}年`;
+    return `${year}${d.getMonth() + 1}月${d.getDate()}日 周${Todos.WEEK[d.getDay()]}${v.length > 10 ? ` ${v.slice(11)}` : ''}`;
   }
+
+  // 占位符显示"空着会补成什么"，下面一行实时显示最终结果
+  function syncWhen() {
+    const bs = bases();
+    const [y, m, d] = bs[0].split('-');
+    const same = (i) => bs.every((b) => b.split('-')[i] === bs[0].split('-')[i]);
+    $('#fDY').placeholder = same(0) ? y : '当年';
+    $('#fDMo').placeholder = same(0) && same(1) ? String(Number(m)) : '当月';
+    $('#fDD').placeholder = bs.length === 1 ? String(Number(d)) : '当天';
+
+    const lines = [];
+    const sp = When.span(fv('sh'), fv('sm'), fv('eh'), fv('em'));
+    if (sp.error) lines.push(`<span class="bad">${esc(sp.error)}</span>`);
+    else if (sp.start) lines.push(`<span>${ICON.clock}${sp.start}${sp.end ? ` – ${sp.end}，${fmtLen(toMin(sp.end) - toMin(sp.start))}` : ' 开始'}</span>`);
+    const p = dueParts();
+    const du = When.due(p, bs[0]);
+    if (du.error) lines.push(`<span class="bad">${esc(du.error)}</span>`);
+    else if (du.value) {
+      const perDay = bs.length > 1 && !p.y && !p.mo && !p.d;
+      lines.push(`<span>${ICON.flag}${perDay ? `每张各自当天${du.value.length > 10 ? ` ${du.value.slice(11)} ` : ''}截止` : `${fmtFull(du.value)} 截止`}</span>`);
+    }
+    $('#whenPreview').innerHTML = lines.join('') || '<span class="muted">不定时间，也没有截止</span>';
+    $('#dueClear').hidden = !Object.values(p).some(Boolean);
+  }
+
   function syncSwatch() {
     $('#tagSwatch').className = `c${colorOf($('#fTag').value.trim().replace(/^#/, ''))}`;
   }
 
-  // opts: { date: 只预选这一天, tag: 预填标签, pos: 画布上的位置 }
+  // opts: { date: 只预选这一天, tag: 预填标签, pos: 画布上的位置, start / end: 预填时间 }
   function openDialog(t, opts = {}) {
     editing = t || null;
     newPos = opts.pos || null;
@@ -425,8 +514,6 @@
     $('#fSave').textContent = t ? '保存' : (dates.length > 1 && !only ? '创建（每天一张）' : '创建');
     $('#fContent').value = t ? t.content : '';
     $('#fTag').value = t ? t.tag : (opts.tag !== undefined ? opts.tag : (S.tag || ''));
-    $('#fDue').value = t ? t.due : '';
-    $('#fPerDay').checked = false;
     $('#datesCreate').hidden = !!t;
     $('#dateEdit').hidden = !t;
     $('#fDel').hidden = !t;
@@ -437,62 +524,115 @@
         return `<label class="dchip"><input type="checkbox" value="${d}"${!only || only === d ? ' checked' : ''}><span>${dt.getMonth() + 1}/${dt.getDate()} 周${Todos.WEEK[dt.getDay()]}${d === today() ? ' · 今天' : ''}</span></label>`;
       }).join('');
     }
+    const s = When.splitHM(t ? t.start : opts.start || '');
+    const e = When.splitHM(t ? t.end : opts.end || '');
+    const du = When.splitDue(t ? t.due : '', t ? t.date : '');
+    setF({ sh: s.h, sm: s.mi, eh: e.h, em: e.mi, ...du });
     syncSwatch();
-    syncPerDay();
+    syncWhen();
+    dlg.classList.remove('closing');
     dlg.showModal();
     $('#fContent').focus();
   }
 
+  // 关闭也有动画；Esc、点遮罩、取消都走这里
+  let closing = false;
+  function closeDialog() {
+    if (!dlg.open || closing) return;
+    closing = true;
+    const finish = () => {
+      if (!closing) return;
+      closing = false;
+      dlg.classList.remove('closing');
+      dlg.close();
+      if (S.view === 'schedule') render(); // 收掉时间轴上"新建"的虚影
+    };
+    if (reduced()) return finish();
+    dlg.classList.add('closing');
+    dlg.addEventListener('animationend', finish, { once: true });
+    setTimeout(finish, 320);
+  }
+
   $('#newBtn').addEventListener('click', () => openDialog());
   $('#fab').addEventListener('click', () => openDialog());
-  $('#fCancel').addEventListener('click', () => dlg.close());
-  dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); }); // 点击遮罩关闭
+  $('#fCancel').addEventListener('click', closeDialog);
+  dlg.addEventListener('cancel', (e) => { e.preventDefault(); closeDialog(); });
+  dlg.addEventListener('click', (e) => { if (e.target === dlg) closeDialog(); }); // 点击遮罩关闭
   $('#fTag').addEventListener('input', syncSwatch);
-  $('#fDue').addEventListener('input', syncPerDay);
-  $('#dchips').addEventListener('change', syncPerDay);
+  $('#fDate').addEventListener('input', syncWhen);
+  $('#dchips').addEventListener('change', syncWhen);
+  When.bindParts($('#spanParts'), syncWhen);
+  When.bindParts($('#dueParts'), syncWhen);
+  $('#dueClear').addEventListener('click', () => {
+    setF({ y: '', mo: '', d: '', h: '', mi: '' });
+    syncWhen();
+    $('#fDY').focus();
+  });
   $('#fDel').addEventListener('click', () => {
     const t = editing;
-    dlg.close();
+    closeDialog();
     if (t) removeWithUndo(t);
   });
-  $('#fContent').addEventListener('keydown', (e) => {
+  $('#form').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('#form').requestSubmit();
   });
 
   $('#form').addEventListener('submit', (e) => {
     e.preventDefault();
+    const fail = (msg, el) => {
+      $('#err').textContent = msg;
+      if (el) el.focus();
+    };
     const content = $('#fContent').value.trim();
     const tag = $('#fTag').value.trim().replace(/^#+/, '');
-    const due = $('#fDue').value;
-    if (!content) {
-      $('#err').textContent = '先写点内容吧';
-      $('#fContent').focus();
-      return;
-    }
+    if (!content) return fail('先写点内容吧', $('#fContent'));
+    const sp = When.span(fv('sh'), fv('sm'), fv('eh'), fv('em'));
+    if (sp.error) return fail(sp.error, $('#fSH'));
+    const p = dueParts();
+
     if (editing) {
       const date = $('#fDate').value || editing.date;
-      Todos.update(editing.id, { content, tag, due, date });
-      dlg.close();
+      const du = When.due(p, date);
+      if (du.error) return fail(du.error, $('#fDY'));
+      Todos.update(editing.id, { content, tag, date, start: sp.start, end: sp.end, due: du.value });
+      closeDialog();
       render();
       if (!dateSet.has(date)) toast(`已移动到 ${fmtDay(date)}，不在当前所选日期里`);
       return;
     }
-    const picked = [...document.querySelectorAll('#dchips input:checked')].map((i) => i.value);
-    if (!picked.length) {
-      $('#err').textContent = '至少选一天';
-      return;
-    }
-    const perDay = $('#fPerDay').checked && due;
+    const picked = pickedDates();
+    if (!picked.length) return fail('至少选一天');
+    // 年月日空着时，每张按自己那天补齐
+    const dues = picked.map((d) => When.due(p, d));
+    const bad = dues.find((r) => r.error);
+    if (bad) return fail(bad.error, $('#fDY'));
     const z = topZ() + 1;
-    const before = new Set(Todos.all().map((t) => t.id));
-    Todos.add(picked.map((date, i) => ({
-      date, content, tag, due: perDay ? `${date}T${due.slice(11)}` : due,
+    const made = Todos.add(picked.map((date, i) => ({
+      date, content, tag, start: sp.start, end: sp.end, due: dues[i].value,
       z: z + i, ...(newPos ? withPos({}, { x: newPos.x + i * 26, y: newPos.y + i * 26 }) : {}),
     })));
-    justAdded = new Set(Todos.all().filter((t) => !before.has(t.id)).map((t) => t.id));
-    dlg.close();
+    justAdded = new Set(made.map((t) => t.id));
+    closeDialog();
     render();
     toast(picked.length > 1 ? `已在 ${picked.length} 天各贴一张` : '已贴好一张便利贴');
+  });
+
+  // ───── Esc：先取消正在进行的拖动；没有的话回到日历（弹窗自己处理 Esc） ─────
+  function cancelCanvasDrag() {
+    const d = drag;
+    drag = null;
+    clearTimeout(d.timer);
+    d.el.classList.remove('dragging');
+    if (d.moved) Object.assign(d.el.style, { left: `${d.x}px`, top: `${d.y}px` });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || dlg.open || e.defaultPrevented) return;
+    if (drag) { e.preventDefault(); cancelCanvasDrag(); return; }
+    if (sched.cancel()) { e.preventDefault(); return; }
+    const el = document.activeElement;
+    if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) { el.blur(); return; }
+    e.preventDefault();
+    location.href = $('#back').href;
   });
 
   // ───── 提示条 ─────
@@ -519,8 +659,9 @@
     openDialog();
   });
 
-  Todos.onExternalChange = () => !drag && render();
+  const idle = () => !dlg.open && !drag && !sched.busy();
+  Todos.onExternalChange = () => idle() && render();
   window.addEventListener('pageshow', (e) => e.persisted && render());
-  setInterval(() => !dlg.open && !drag && render(), 60000); // 逾期状态随时间刷新
+  setInterval(() => idle() && render(), 60000); // 逾期状态、"现在"红线随时间刷新
   render();
 })();

@@ -41,7 +41,8 @@ const isStr = (v, max) => typeof v === 'string' && v.length <= max;
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const DUE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+const DUE = /^\d{4}-\d{2}-\d{2}(T([01]\d|2[0-3]):[0-5]\d)?$/; // 截止：可以只有日期
+const HM = /^(([01]\d|2[0-3]):[0-5]\d|24:00)$/; // 当天的开始 / 结束时刻，结束可以是 24:00
 
 function cleanPos(p) {
   if (!p || typeof p !== 'object') return undefined;
@@ -60,6 +61,8 @@ export function cleanTodo(t) {
   if (!isStr(t.content, 2000) || !t.content.trim()) throw new HttpError(400, 'content 不合法');
   if (t.tag !== undefined && !isStr(t.tag, 40)) throw new HttpError(400, 'tag 不合法');
   if (t.due && !DUE.test(t.due)) throw new HttpError(400, 'due 不合法');
+  if (t.start && (!HM.test(t.start) || t.start === '24:00')) throw new HttpError(400, 'start 不合法');
+  if (t.end && !HM.test(t.end)) throw new HttpError(400, 'end 不合法');
   if (!isNum(t.updatedAt)) throw new HttpError(400, 'updatedAt 不合法');
   const out = {
     id: t.id,
@@ -67,6 +70,8 @@ export function cleanTodo(t) {
     content: t.content,
     tag: t.tag || '',
     due: t.due || '',
+    start: t.start || '',
+    end: t.start && t.end > t.start ? t.end : '', // 没有开始就没有结束；结束要晚于开始
     done: Boolean(t.done),
     createdAt: isNum(t.createdAt) ? t.createdAt : t.updatedAt,
     updatedAt: t.updatedAt,
