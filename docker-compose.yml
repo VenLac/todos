@@ -1,0 +1,18 @@
+services:
+  todos:
+    build: .
+    image: todos:latest
+    container_name: todos
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PORT: "8080" # 容器内固定 8080，对外端口由上面的 ports 决定
+    volumes:
+      - todos-data:/data
+
+volumes:
+  todos-data:

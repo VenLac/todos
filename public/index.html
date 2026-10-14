@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#efeee9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
+<title>Todos 日历</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="cal-page">
+<div class="cal-shell">
+  <aside class="rail">
+    <header class="cal-head">
+      <h1 class="cal-title" id="title"></h1>
+      <div class="cal-ctrl">
+        <button class="btn icon" id="prev" aria-label="上个月"><svg class="ic" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <button class="btn" id="today">今天</button>
+        <button class="btn icon" id="next" aria-label="下个月"><svg class="ic" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+      </div>
+    </header>
+
+    <div class="progress" id="progress">
+      <p class="cal-stat" id="stat"></p>
+      <div class="bar" id="bar" aria-hidden="true"></div>
+    </div>
+
+    <section class="upcoming">
+      <h2>接下来</h2>
+      <ol id="upcoming"></ol>
+    </section>
+
+    <details class="hint">
+      <summary>选择技巧</summary>
+      <ul class="h-touch">
+        <li><b>轻点</b>一天，打开当天</li>
+        <li><b>长按</b>进入多选，按住继续拖可以连选</li>
+        <li>多选时<b>轻点</b>日期增减，再点“打开便利贴”</li>
+        <li><b>左右滑动</b>月历，切换月份</li>
+      </ul>
+      <ul class="h-mouse">
+        <li><b>单击</b>一天，打开当天</li>
+        <li><b>按住拖过</b>多天，松手后一起打开</li>
+        <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + 点击，跨月累加</li>
+        <li><kbd>Shift</kbd> + 点击，选中一段</li>
+      </ul>
+    </details>
+
+    <footer class="rail-foot" id="railFoot" hidden>
+      <a href="api/export" download>导出备份</a>
+      <button type="button" id="logout" hidden>退出登录</button>
+    </footer>
+  </aside>
+
+  <main class="cal-main">
+    <div class="weekdays" aria-hidden="true"><span>周一</span><span>周二</span><span>周三</span><span>周四</span><span>周五</span><span class="we">周六</span><span class="we">周日</span></div>
+    <div class="grid" id="grid" role="group" aria-label="月历"></div>
+  </main>
+</div>
+
+<div class="selbar" id="selbar" role="status">
+  <span id="selTxt"></span>
+  <button class="btn primary" id="selOpen">打开便利贴</button>
+  <button class="btn ghost" id="selClear">清除</button>
+</div>
+
+<script src="js/store.js"></script>
+<script src="js/calendar.js"></script>
+</body>
+</html>

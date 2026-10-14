@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#efeee9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
+<title>便利贴 · Todos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="board-page">
+<div class="wrap">
+  <header class="top">
+    <a class="btn icon round" id="back" href="index.html" aria-label="返回日历"><svg class="ic" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <div class="ttl">
+      <h1 id="title"></h1>
+      <p id="sub"></p>
+    </div>
+    <div class="mode" role="tablist" aria-label="视图">
+      <button type="button" role="tab" data-view="canvas" aria-selected="true">
+        <svg class="ic" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5" transform="rotate(-6 7.5 7.5)"/><rect x="13" y="5" width="7" height="7" rx="1.5" transform="rotate(5 16.5 8.5)"/><rect x="7" y="13" width="7" height="7" rx="1.5" transform="rotate(3 10.5 16.5)"/></svg>自由贴
+      </button>
+      <button type="button" role="tab" data-view="list" aria-selected="false">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>整理
+      </button>
+    </div>
+    <button class="btn primary" id="newBtn"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>新建</button>
+  </header>
+
+  <div class="toolbar">
+    <div class="chips" id="chips" role="group" aria-label="按标签筛选"></div>
+    <div class="tools">
+      <div class="seg" id="groupSeg" role="group" aria-label="分类方式">
+        <button type="button" data-group="date" aria-pressed="true">按日期</button>
+        <button type="button" data-group="tag" aria-pressed="false">按标签</button>
+        <button type="button" data-group="flat" aria-pressed="false">列表</button>
+      </div>
+      <button type="button" class="btn soft" id="tidyBtn"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>一键排齐</button>
+      <label class="switch"><input type="checkbox" id="hideDone"><i></i>隐藏已完成</label>
+    </div>
+  </div>
+
+  <main id="stage" class="stage"></main>
+</div>
+
+<button class="fab" id="fab" aria-label="新建便利贴"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+
+<dialog id="dlg">
+  <form class="form" id="form" method="dialog" novalidate>
+    <h2 id="dlgTitle">新建便利贴</h2>
+
+    <div class="field">
+      <label for="fContent">内容</label>
+      <textarea id="fContent" maxlength="500" placeholder="要做什么？" required></textarea>
+    </div>
+
+    <div class="two">
+      <div class="field">
+        <label for="fTag">标签</label>
+        <div class="tagwrap">
+          <input type="text" id="fTag" list="tagList" maxlength="12" placeholder="如 工作、生活" autocomplete="off">
+          <i class="c0" id="tagSwatch"></i>
+        </div>
+        <datalist id="tagList"></datalist>
+      </div>
+      <div class="field">
+        <label for="fDue">截止时间</label>
+        <input type="datetime-local" id="fDue">
+      </div>
+    </div>
+
+    <label class="check" id="perDayRow" hidden><input type="checkbox" id="fPerDay"> 每天都在这个时刻截止（沿用各自的日期）</label>
+
+    <div class="field" id="datesCreate">
+      <span>新建到这些天（每天一张）</span>
+      <div class="dchips" id="dchips"></div>
+    </div>
+    <div class="field" id="dateEdit" hidden>
+      <label for="fDate">日期</label>
+      <input type="date" id="fDate">
+    </div>
+
+    <p class="err" id="err" role="alert"></p>
+    <div class="form-actions">
+      <button type="button" class="btn danger" id="fDel" hidden>删除</button>
+      <span class="sp"></span>
+      <button type="button" class="btn" id="fCancel">取消</button>
+      <button type="submit" class="btn primary" id="fSave">创建</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status"><span id="toastTxt"></span><button type="button" id="toastBtn"></button></div>
+
+<script src="js/store.js"></script>
+<script src="js/board.js"></script>
+</body>
+</html>
